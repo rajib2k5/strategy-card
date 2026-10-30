@@ -1,0 +1,12 @@
+{
+  "name": "strategy-card",
+  "version": "0.1.0",
+  "description": "Draft, validate and badge a one-page disclosure card for a backtest. Analysis only: no orders, no brokers, no network. Not investment advice.",
+  "author": {
+    "name": "Rajib Bahar"
+  },
+  "homepage": "https://github.com/rajib2k5/strategy-card",
+  "repository": "https://github.com/rajib2k5/strategy-card",
+  "license": "MIT",
+  "keywords": ["backtest", "disclosure", "deflated-sharpe", "model-card"]
+}

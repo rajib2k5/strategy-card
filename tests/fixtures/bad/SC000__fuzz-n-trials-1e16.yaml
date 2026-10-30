@@ -1,0 +1,46 @@
+# Must fail with SC000: n_trials 1e16 is above the 10,000,000 maximum (was StatisticsError traceback).
+# Source: reviewer's forged card (round 2 review), reproduced as a fixture.
+schema_version: '0.1'
+strategy:
+  name: Synthetic momentum (demo)
+  description: Demo card built from seeded synthetic returns. It shows the card format
+    only and describes no real strategy.
+test_window:
+  in_sample:
+    start: '2015-01-02'
+    end: '2021-12-31'
+  out_of_sample:
+    start: '2022-01-03'
+    end: '2024-08-29'
+costs:
+  fees_bps: 1.0
+  slippage_bps: 2.0
+  model: Per side, on traded notional, charged at every rebalance.
+trials:
+  count: 10000000000000000
+  log: examples/trials.csv
+performance:
+  periods_per_year: 252
+  sharpe:
+    in_sample: 1.2106
+    out_of_sample: 0.512
+  deflated_sharpe:
+    value: 0.9426
+    n_trials: 10000000000000000
+    sharpe_annualized: 1.2106
+    sr_benchmark_annualized: 0.6208
+    trial_sharpe_variance_annualized: 0.0966
+    n_observations: 1826
+    skew: -0.1333
+    kurtosis_pearson: 3.0906
+    method: 'Bailey & Lopez de Prado (2014): PSR at SR* = E[max SR] over n_trials,
+      zero-mean null, sample variance of trial Sharpes, in-sample returns'
+data:
+  point_in_time: as_reported
+  survivorship:
+    handling: not_applicable
+    notes: Synthetic single-series data. There is no universe, so no names can be
+      delisted.
+  sources:
+  - name: Synthetic returns from scripts/make_synthetic.py (seed 20260101)
+    license: MIT

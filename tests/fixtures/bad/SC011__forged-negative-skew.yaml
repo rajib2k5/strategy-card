@@ -1,0 +1,46 @@
+# Must fail with SC011: skew -78.58 exceeds the 1826-point maximum and kurtosis bound.
+# Source: reviewer's forged card (round 2 review), reproduced as a fixture.
+schema_version: '0.1'
+strategy:
+  name: Synthetic momentum (demo)
+  description: Demo card built from seeded synthetic returns. It shows the card format
+    only and describes no real strategy.
+test_window:
+  in_sample:
+    start: '2015-01-02'
+    end: '2021-12-31'
+  out_of_sample:
+    start: '2022-01-03'
+    end: '2024-08-29'
+costs:
+  fees_bps: 1.0
+  slippage_bps: 2.0
+  model: Per side, on traded notional, charged at every rebalance.
+trials:
+  count: 25
+  log: examples/trials.csv
+performance:
+  periods_per_year: 252
+  sharpe:
+    in_sample: -0.2
+    out_of_sample: -0.2
+  deflated_sharpe:
+    value: 0.0
+    n_trials: 25
+    sharpe_annualized: -0.2
+    sr_benchmark_annualized: 0.6207
+    trial_sharpe_variance_annualized: 0.0966
+    n_observations: 1826
+    skew: -78.58
+    kurtosis_pearson: 1.0
+    method: 'Bailey & Lopez de Prado (2014): PSR at SR* = E[max SR] over n_trials,
+      zero-mean null, sample variance of trial Sharpes, in-sample returns'
+data:
+  point_in_time: as_reported
+  survivorship:
+    handling: not_applicable
+    notes: Synthetic single-series data. There is no universe, so no names can be
+      delisted.
+  sources:
+  - name: Synthetic returns from scripts/make_synthetic.py (seed 20260101)
+    license: MIT
