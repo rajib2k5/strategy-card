@@ -1,0 +1,37 @@
+# virtual environments
+.venv/
+venv/
+env/
+
+# caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.hypothesis/
+.coverage
+htmlcov/
+
+# build artefacts
+build/
+dist/
+*.egg-info/
+*.whl
+
+# secrets
+*.env
+.env*
+
+# mutation-check backups
+*.mutbak
+.env.*
+secrets.*
+*.pem
+*.key
+id_rsa*
+
+# raw market data: never commit vendor data
+data/
+*.parquet
+*.feather
