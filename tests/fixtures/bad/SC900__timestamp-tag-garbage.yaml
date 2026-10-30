@@ -1,0 +1,2 @@
+# Must fail with SC900: !!timestamp zz raised AttributeError in PyYAML.
+schema_version: !!timestamp zz

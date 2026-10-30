@@ -1,0 +1,23 @@
+# Must fail with SC000: reviewer's 'dsr_lie' card (SR 0.3, SR* 4.0, n_obs 10, DSR 0.999).
+# It used to get grade A under --strict. The DSR inputs are now required, and SC007/SC008
+# recompute them (see the SC007__/SC008__ fixtures for complete-but-false variants).
+schema_version: "0.1"
+strategy: {name: x, description: y}
+test_window:
+  in_sample: {start: "2015-01-02", end: "2021-12-31"}
+  out_of_sample: {start: "2022-01-03", end: "2024-08-29"}
+costs: {fees_bps: 0.0, slippage_bps: 0.01, model: m}
+trials: {count: 5000}
+performance:
+  periods_per_year: 252
+  sharpe: {in_sample: 0.3, out_of_sample: 0.2}
+  deflated_sharpe:
+    value: 0.999
+    n_trials: 5000
+    sharpe_annualized: 0.3
+    sr_benchmark_annualized: 4.0
+    n_observations: 10
+data:
+  point_in_time: as_reported
+  survivorship: {handling: not_applicable}
+  sources: [{name: s}]

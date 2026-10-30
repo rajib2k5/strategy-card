@@ -1,0 +1,2 @@
+# Must fail with SC900: !!int "" raised IndexError in PyYAML (traceback before the fix).
+schema_version: !!int ""

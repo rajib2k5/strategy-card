@@ -1,0 +1,2 @@
+# Must fail with SC900: the top level is a list, not a mapping.
+- schema_version: "0.1"

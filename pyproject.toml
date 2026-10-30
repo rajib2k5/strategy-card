@@ -1,0 +1,51 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "strategy-card"
+version = "0.1.0"
+description = "A one-page, machine-checkable disclosure card and badge for any backtest."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Rajib Bahar" }]
+requires-python = ">=3.10"
+dependencies = [
+    "pyyaml>=6.0",
+    "jsonschema>=4.18",
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Topic :: Office/Business :: Financial :: Investment",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+    "numpy>=1.26",
+    "scipy>=1.11",
+    "hypothesis>=6.100",
+    "ruff>=0.5",
+]
+
+[project.scripts]
+strategy-card = "strategy_card.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/strategy_card"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]
+
+[tool.ruff.lint.per-file-ignores]
+# The mutation table keeps each (old, new) pair on one line so it reads as a table.
+"scripts/mutation_check.py" = ["E501"]

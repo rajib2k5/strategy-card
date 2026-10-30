@@ -1,0 +1,46 @@
+# Warning SC104 only, yet these moments are IMPOSSIBLE: kurtosis = skew^2 + 1 (1601 = 40^2 + 1) is reachable only by a two-valued sample, and for n = 1826 a two-valued sample has |skew| 42.70 or 30.17, never 40. SC011 checks necessary bounds only (Pearson and sample size), so this card passes it. Moments beyond those bounds are taken on trust (docs/RULES.md).
+# Source: reviewer's forged card (round 2 review), reproduced as a fixture.
+schema_version: '0.1'
+strategy:
+  name: Synthetic momentum (demo)
+  description: Demo card built from seeded synthetic returns. It shows the card format
+    only and describes no real strategy.
+test_window:
+  in_sample:
+    start: '2015-01-02'
+    end: '2021-12-31'
+  out_of_sample:
+    start: '2022-01-03'
+    end: '2024-08-29'
+costs:
+  fees_bps: 1.0
+  slippage_bps: 2.0
+  model: Per side, on traded notional, charged at every rebalance.
+trials:
+  count: 25
+  log: examples/trials.csv
+performance:
+  periods_per_year: 252
+  sharpe:
+    in_sample: 0.3
+    out_of_sample: 0.3
+  deflated_sharpe:
+    value: 0.7539
+    n_trials: 25
+    sharpe_annualized: 0.3
+    sr_benchmark_annualized: 0.1412
+    trial_sharpe_variance_annualized: 0.005
+    n_observations: 1826
+    skew: 40.0
+    kurtosis_pearson: 1601.0
+    method: 'Bailey & Lopez de Prado (2014): PSR at SR* = E[max SR] over n_trials,
+      zero-mean null, sample variance of trial Sharpes, in-sample returns'
+data:
+  point_in_time: as_reported
+  survivorship:
+    handling: not_applicable
+    notes: Synthetic single-series data. There is no universe, so no names can be
+      delisted.
+  sources:
+  - name: Synthetic returns from scripts/make_synthetic.py (seed 20260101)
+    license: MIT

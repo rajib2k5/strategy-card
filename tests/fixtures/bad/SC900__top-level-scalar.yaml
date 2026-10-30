@@ -1,0 +1,2 @@
+# Must fail with SC900: the top level is a string.
+just a string

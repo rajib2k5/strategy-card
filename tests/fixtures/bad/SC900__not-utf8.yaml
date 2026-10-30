@@ -1,0 +1,3 @@
+# Must fail with SC900: not UTF-8.
+schema_version: "0.1"
+name: ÿþ
