@@ -70,3 +70,8 @@ def test_grade_is_order_independent():
 def test_f_grade_counts_errors():
     g = grade([e("SC001"), e("SC002"), PIT])
     assert g.letter == "F" and g.errors == 2
+
+
+def test_sc012_alone_costs_one_point():
+    g = grade([w("SC012", "same-trials")])
+    assert g.points == 1 and g.letter == "B"

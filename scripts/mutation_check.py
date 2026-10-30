@@ -172,6 +172,10 @@ MUTATIONS: list[tuple[str, str, str, str, str]] = [
     ("M92", F, 'block["value"] = _r4(rules.recomputed_dsr(view, block))', 'block["value"] = _r4(res.value)', "fill: DSR from unrounded inputs"),
     ("M93", L, "mode = stat.S_IMODE(st.st_mode) & 0o777", "mode = stat.S_IMODE(st.st_mode)", "writer: keep setuid/setgid/sticky"),
     ("M94", L, "p.unlink(missing_ok=True)  # we created it with O_EXCL, so it is ours to remove", "pass", "writer: leave partial file on error"),
+    # ---- review round 4
+    ("M95", F, "    kurt = min(kurt, _floor4((n * n - 3 * n + 3) / (n - 1)))\n", "", "fill: drop kurtosis upper clamp"),
+    ("M96", G, '"SC012": 1,', '"SC012": 0,', "grade: SC012 weight 1 -> 0"),
+    ("M97", F, '"trial_sharpe_variance_annualized": _sig6(res.trial_sharpe_variance_annualized),', '"trial_sharpe_variance_annualized": _r4(res.trial_sharpe_variance_annualized),', "fill: trial variance to 4 dp, not 6 sig figs"),
 ]
 # fmt: on
 

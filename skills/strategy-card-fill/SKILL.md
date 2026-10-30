@@ -44,8 +44,14 @@ at the start.
    ```
 
    If `card.yaml` exists, the command stops. Ask the user before you add `--force`.
-4. Run `strategy-card validate card.yaml`. The draft must fail with `SC006` errors. Each
-   `SC006` line names one field that only a human can supply.
+4. If step 3 stopped with exit code 2 and the message "the draft card would fail
+   validation: <rule>", show the user the full message and the rule ID. Explain the rule
+   with `docs/RULES.md` of the strategy-card repository. Do not work around the refusal.
+   Do not change the numbers or the input files to make the check pass. Ask the user what
+   they want to do. Then stop.
+
+   Otherwise, run `strategy-card validate card.yaml`. The draft must fail with `SC006`
+   errors. Each `SC006` line names one field that only a human can supply.
 5. Ask the user for each `SC006` field. Ask the questions together, in this order:
    - `strategy.name` and `strategy.description`.
    - `costs.fees_bps`, `costs.slippage_bps`, `costs.model`. Ask for the real values. Do not

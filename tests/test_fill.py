@@ -721,3 +721,35 @@ def test_fill_dsr_round_trips_exactly_at_4_dp(tmp_path, seed):
     sr_star = R._recomputed_sr_star_pp(card, d) * math.sqrt(252)
     assert d["sr_benchmark_annualized"] == round(sr_star, 4)
     assert d["value"] == round(R.recomputed_dsr(card, d), 4)
+
+
+# ---- fill clamps and rounds the DSR inputs so the written card validates
+def test_single_spike_kurtosis_is_clamped_to_the_sc011_maximum(tmp_path, capsys):
+    """n = 393 with one outlier: the kurtosis is 391.00255..., which rounds to 391.0026,
+    above the SC011 maximum. fill must clamp it down so the draft still validates."""
+    days = [str(d) for d in np.busday_offset("2019-01-01", np.arange(450), roll="forward")]
+    split = days[393]
+    lines = ["date,return"]
+    for i, day in enumerate(days):
+        if i < 393:
+            value = 0.05 if i == 200 else 0.001
+        else:
+            value = 0.001 * (1 + (i % 3))
+        lines.append(f"{day},{value}")
+    returns = write(tmp_path, "r.csv", "\n".join(lines) + "\n")
+    trials = write(tmp_path, "t.csv", "sharpe_annualized\n0.5\n1.0\n1.5\n")
+    out = tmp_path / "c.yaml"
+    args = ["fill", "--returns", str(returns), "--trials", str(trials), "-o", str(out)]
+    assert main([*args, "--periods-per-year", "252", "--split-date", split]) == 0
+    dsr = yaml.safe_load(out.read_text())["performance"]["deflated_sharpe"]
+    assert dsr["n_observations"] == 393
+    assert dsr["kurtosis_pearson"] == 391.0025
+    assert {f.id for f in validate_file(out).findings} == {"SC006"}
+
+
+def test_trial_variance_is_rounded_to_six_significant_figures(returns_csv):
+    rows = read_returns(returns_csv)
+    # sample variance is 0.000152415073923...; 4 dp would give 0.0002
+    card = build_card(rows, [1.0, 1.0123456, 1.0246913], "annualized", 252)
+    var = card["performance"]["deflated_sharpe"]["trial_sharpe_variance_annualized"]
+    assert var == 0.000152415

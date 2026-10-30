@@ -1,6 +1,6 @@
 # Sample strategy card. All numbers come from SYNTHETIC data:
 #   strategy-card fill --returns examples/returns.csv --trials examples/trials.csv \
-#     --split-date 2022-01-03 -o card.yaml
+#     --periods-per-year 252 --split-date 2022-01-03 -o card.yaml
 # The human-only fields were then filled in by hand. Not investment advice.
 schema_version: "0.1"
 strategy:
