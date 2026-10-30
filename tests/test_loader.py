@@ -251,3 +251,53 @@ def test_exclusive_write_does_not_check_then_write(tmp_path, monkeypatch):
     with pytest.raises(FileExistsError):
         write_text_atomic(p, "mine", overwrite=False)
     assert p.read_text() == "attacker"
+
+
+# ---- round 3: --force never keeps setuid/setgid/sticky; fallback cleans up
+@pytest.mark.parametrize("old_mode,new_mode", [(0o4755, 0o755), (0o2750, 0o750), (0o1644, 0o644)])
+def test_force_overwrite_drops_special_bits(tmp_path, old_mode, new_mode):
+    p = tmp_path / "x.svg"
+    p.write_text("old")
+    os.chmod(p, old_mode)
+    if stat.S_IMODE(p.stat().st_mode) != old_mode:
+        pytest.skip("file system does not keep special bits")
+    write_text_atomic(p, "new", overwrite=True)
+    assert stat.S_IMODE(p.stat().st_mode) == new_mode
+
+
+def test_exclusive_fallback_removes_partial_file_on_write_error(tmp_path, monkeypatch):
+    import errno
+
+    from strategy_card import loader as ld
+
+    def no_links(*a, **k):
+        raise OSError(errno.EPERM, "hard links not supported")
+
+    def half_write(fd, text):
+        os.write(fd, text[: len(text) // 2].encode())
+        raise OSError(errno.ENOSPC, "No space left on device")
+
+    monkeypatch.setattr(ld.os, "link", no_links)
+    monkeypatch.setattr(ld, "_write_all", half_write)
+    p = tmp_path / "out.svg"
+    with pytest.raises(OSError):
+        write_text_atomic(p, "x" * 1000, overwrite=False)
+    assert not p.exists()
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_exclusive_fallback_writes_when_links_unsupported(tmp_path, monkeypatch):
+    import errno
+
+    from strategy_card import loader as ld
+
+    def no_links(*a, **k):
+        raise OSError(errno.EPERM, "hard links not supported")
+
+    monkeypatch.setattr(ld.os, "link", no_links)
+    p = tmp_path / "out.svg"
+    write_text_atomic(p, "hello", overwrite=False)
+    assert p.read_text() == "hello"
+    with pytest.raises(FileExistsError):
+        write_text_atomic(p, "again", overwrite=False)
+    assert p.read_text() == "hello"

@@ -76,7 +76,7 @@ performance:
     n_trials: 25
     sharpe_annualized: 1.2106
     sr_benchmark_annualized: 0.6208
-    trial_sharpe_variance_annualized: 0.0966
+    trial_sharpe_variance_annualized: 0.0966249
     n_observations: 1826
     skew: -0.1333
     kurtosis_pearson: 3.0906
@@ -160,7 +160,7 @@ The full rule table, the exit codes and the grading method are in [docs/RULES.md
 
 | Errors | Warnings |
 |---|---|
-| `SC000` schema, `SC001` window order, `SC002` out-of-sample after in-sample, `SC003` DSR required, `SC004` DSR trial count, `SC005` non-finite number, `SC006` placeholder, `SC007` DSR benchmark recomputed, `SC008` DSR value recomputed, `SC009` DSR Sharpe equals in-sample Sharpe, `SC010` DSR observations match the window, `SC011` possible skew and kurtosis, `SC012` trial variance above zero | `SC101` costs below 0.5 bps, `SC102` not point-in-time, `SC103` survivorship bias, `SC104` DSR below 0.95, `SC105` out-of-sample decay, `SC106` short out-of-sample window |
+| `SC000` schema, `SC001` window order, `SC002` out-of-sample after in-sample, `SC003` DSR required, `SC004` DSR trial count, `SC005` non-finite number, `SC006` placeholder, `SC007` DSR benchmark recomputed, `SC008` DSR value recomputed, `SC009` DSR Sharpe equals in-sample Sharpe, `SC010` DSR observations match the window, `SC011` skew and kurtosis inside necessary bounds | `SC101` costs below 0.5 bps, `SC102` not point-in-time, `SC103` survivorship bias, `SC104` DSR below 0.95, `SC105` out-of-sample decay, `SC106` short out-of-sample window, `SC012` identical trials |
 
 `SC900` means that the tool cannot read the input.
 
@@ -199,7 +199,7 @@ To install the plugin:
 
 ## What a card can and cannot prove
 
-A card is a disclosure, not a proof. The validator checks that a card is complete, consistent and possible. It cannot check that the numbers are true. The Sharpe ratios, the window dates, the trial count, the trial variance and the moments are taken on trust, inside the limits in [docs/RULES.md](docs/RULES.md#taken-on-trust).
+A card is a disclosure, not a proof. The validator checks that a card is complete, consistent, and inside necessary bounds. It cannot check that the numbers are true. For the skew and kurtosis, it checks necessary bounds (Pearson and sample-size) only. Passing these bounds does not prove that the moments are achievable. The Sharpe ratios, the window dates, the trial count, the trial variance and the moments are taken on trust, inside the limits in [docs/RULES.md](docs/RULES.md#taken-on-trust).
 
 ## Disclaimer
 

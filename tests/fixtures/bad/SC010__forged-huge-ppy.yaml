@@ -1,4 +1,4 @@
-# Must fail with SC012: 25 trials with trial Sharpe variance 0 make SR* = 0.
+# Must fail with SC010 (error); SC012 trials-identical is a warning since round 3: 100000 periods per year and zero trial variance.
 # Source: reviewer's forged card (round 2 review), reproduced as a fixture.
 schema_version: '0.1'
 strategy:
@@ -20,19 +20,19 @@ trials:
   count: 25
   log: examples/trials.csv
 performance:
-  periods_per_year: 252
+  periods_per_year: 100000
   sharpe:
     in_sample: 0.5
     out_of_sample: 0.5
   deflated_sharpe:
-    value: 0.9103
+    value: 0.9687
     n_trials: 25
     sharpe_annualized: 0.5
     sr_benchmark_annualized: 0.0
     trial_sharpe_variance_annualized: 0.0
-    n_observations: 1826
-    skew: -0.13
-    kurtosis_pearson: 3.09
+    n_observations: 1386000
+    skew: 0.0
+    kurtosis_pearson: 3.0
     method: 'Bailey & Lopez de Prado (2014): PSR at SR* = E[max SR] over n_trials,
       zero-mean null, sample variance of trial Sharpes, in-sample returns'
 data:

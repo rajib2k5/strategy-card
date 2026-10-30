@@ -264,12 +264,12 @@ def test_sc007_understated_benchmark_is_error(card):
 
 
 def test_sc007_benchmark_within_tolerance_is_fine(card):
-    dsr(card)["sr_benchmark_annualized"] += 0.009
+    dsr(card)["sr_benchmark_annualized"] += 0.00009
     assert "SC007" not in ids(card)
 
 
 def test_sc007_benchmark_just_outside_tolerance_is_error(card):
-    dsr(card)["sr_benchmark_annualized"] += 0.011
+    dsr(card)["sr_benchmark_annualized"] += 0.00011
     assert ids(card) == ["SC007"]
 
 
@@ -279,12 +279,12 @@ def test_sc008_inflated_value_is_error(card):
 
 
 def test_sc008_value_within_tolerance_is_fine(card):
-    dsr(card)["value"] -= 0.004
+    dsr(card)["value"] -= 0.00009
     assert "SC008" not in ids(card)
 
 
 def test_sc008_value_just_outside_tolerance_is_error(card):
-    dsr(card)["value"] -= 0.006
+    dsr(card)["value"] -= 0.00011
     assert "SC008" in ids(card)
 
 
@@ -307,7 +307,7 @@ def test_sc009_dsr_sharpe_must_match_in_sample_sharpe(card):
 
 
 def test_sc009_within_tolerance_is_fine(card):
-    card["performance"]["sharpe"]["in_sample"] = 1.209
+    card["performance"]["sharpe"]["in_sample"] = 1.20009
     assert "SC009" not in ids(card)
 
 
@@ -523,3 +523,40 @@ def test_schema_accepts_values_at_documented_maxima(card, path, value):
         node = node[k]
     node[path[-1]] = value
     assert schema_findings(card) == []
+
+
+# ---- round 3: tolerances are 4-dp rounding, and SC104 grades the recomputed DSR
+def test_sc009_just_outside_tolerance_is_error(card):
+    card["performance"]["sharpe"]["in_sample"] = 1.20011
+    assert ids(card) == ["SC009"]
+
+
+def test_sc104_uses_recomputed_dsr_when_stated_is_higher(card):
+    """r3/tol_forged.yaml: stated 0.95, inputs give 0.9452 -> SC104 must still warn."""
+    card["performance"]["sharpe"]["in_sample"] = 1.1676
+    dsr(card).update(sharpe_annualized=1.1676, value=0.95)
+    assert [f.id for f in rules.sc104_low_dsr(card)] == ["SC104"]
+    assert "SC008" in ids(card)
+
+
+def test_sc104_uses_stated_dsr_when_it_is_lower(card):
+    dsr(card)["value"] = 0.9  # recomputed is 0.9546
+    assert [f.id for f in rules.sc104_low_dsr(card)] == ["SC104"]
+
+
+def test_sc104_recomputed_dsr_above_threshold_is_fine(card):
+    assert rules.sc104_low_dsr(card) == []  # stated = recomputed = 0.9546
+
+
+def test_sc011_pearson_tolerance_is_tight(card):
+    """kurtosis 1e-4 below skew^2 + 1 must fire (kills X2: tolerance 1e-9 -> 1e-3)."""
+    dsr(card)["skew"] = 2.0
+    dsr(card)["kurtosis_pearson"] = 4.9999
+    assert [f.id for f in rules.sc011_dsr_moments(card)] == ["SC011"]
+
+
+def test_sc012_is_a_warning_not_an_error(card):
+    """Round 3: identical honest trials give zero variance; SR* = 0 is then correct."""
+    dsr(card)["trial_sharpe_variance_annualized"] = 0.0
+    found = rules.sc012_trial_variance(card)
+    assert [(f.id, f.severity, f.flag) for f in found] == [("SC012", WARNING, "same-trials")]

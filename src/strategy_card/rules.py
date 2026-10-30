@@ -24,8 +24,9 @@ PLACEHOLDER = "__FILL_ME__"
 
 DSR_THRESHOLD = 0.95
 NEGLIGIBLE_COST_BPS = 0.5  # fees + slippage below this total is treated as no cost
-SR_TOLERANCE = 0.01  # annualized Sharpe units, for recomputed SR* and the SR cross-check
-DSR_TOLERANCE = 0.005  # probability units, for the recomputed DSR value
+# Tolerances cover rounding a stated value to 4 decimal places (max error 5e-5), no more.
+SR_TOLERANCE = 1e-4  # annualized Sharpe: stated SR* vs recomputed; DSR SR vs in-sample SR
+DSR_TOLERANCE = 1e-4  # probability: stated DSR vs DSR recomputed from the stated inputs
 NOBS_FACTOR = 1.2  # (n_observations - 1) vs in-sample periods spanned
 NOBS_SLACK_PERIODS = 1.0  # plus or minus one period, for partial periods at the ends
 DAYS_PER_YEAR = 365.25
@@ -183,21 +184,25 @@ def sc007_dsr_benchmark(card: dict) -> list[Finding]:
     return []
 
 
+def recomputed_dsr(card: dict, dsr: dict) -> float:
+    """DSR from the card's own inputs and the RECOMPUTED SR* (never the stated SR*)."""
+    ppy = card["performance"]["periods_per_year"]
+    return stats.probabilistic_sharpe_ratio(
+        stats.deannualize(dsr["sharpe_annualized"], ppy),
+        _recomputed_sr_star_pp(card, dsr),
+        dsr["n_observations"],
+        dsr["skew"],
+        dsr["kurtosis_pearson"],
+    )
+
+
 def sc008_dsr_value(card: dict) -> list[Finding]:
-    """Recompute DSR from the card's own inputs, using the RECOMPUTED SR* (not the stated one)."""
     dsr = _dsr_inputs(card)
     if dsr is None:
         return []
-    ppy = card["performance"]["periods_per_year"]
     path = "performance.deflated_sharpe.value"
     try:
-        expected = stats.probabilistic_sharpe_ratio(
-            stats.deannualize(dsr["sharpe_annualized"], ppy),
-            _recomputed_sr_star_pp(card, dsr),
-            dsr["n_observations"],
-            dsr["skew"],
-            dsr["kurtosis_pearson"],
-        )
+        expected = recomputed_dsr(card, dsr)
     except ValueError as exc:
         return [SC008.finding(path, f"the DSR inputs are inconsistent: {exc}")]
     if abs(dsr["value"] - expected) > DSR_TOLERANCE:
@@ -287,8 +292,9 @@ def sc012_trial_variance(card: dict) -> list[Finding]:
         return [
             SC012.finding(
                 "performance.deflated_sharpe.trial_sharpe_variance_annualized",
-                f"{dsr['n_trials']} trials with Sharpe variance {var}: distinct trials cannot "
-                f"all have the same Sharpe ratio (minimum {MIN_TRIAL_VARIANCE})",
+                f"{dsr['n_trials']} trials with Sharpe variance {var} (below "
+                f"{MIN_TRIAL_VARIANCE}): all trials have the same Sharpe ratio, so they count as "
+                "one distinct trial and SR* is 0. Check that the variants really differ.",
             )
         ]
     return []
@@ -347,12 +353,24 @@ def sc103_survivorship(card: dict) -> list[Finding]:
 
 
 def sc104_low_dsr(card: dict) -> list[Finding]:
+    """Grade the LOWER of the stated DSR and the DSR recomputed from the card's inputs, so a
+    stated value inside the SC008 tolerance cannot lift the card over the threshold."""
     dsr = card["performance"].get("deflated_sharpe")
-    if dsr is not None and dsr["value"] < DSR_THRESHOLD:
+    if dsr is None:
+        return []
+    value = dsr["value"]
+    inputs = _dsr_inputs(card)
+    if inputs is not None:
+        try:
+            value = min(value, recomputed_dsr(card, inputs))
+        except (KeyError, ValueError, ArithmeticError):
+            pass  # SC008 reports unusable inputs; grade the stated value here
+    if value < DSR_THRESHOLD:
         return [
             SC104.finding(
                 "performance.deflated_sharpe.value",
-                f"deflated Sharpe ratio {dsr['value']} is below {DSR_THRESHOLD}",
+                f"deflated Sharpe ratio {value:.4f} (lower of stated {dsr['value']} and "
+                f"recomputed) is below {DSR_THRESHOLD}",
             )
         ]
     return []
@@ -395,7 +413,7 @@ SC008 = Rule("SC008", "dsr-value-mismatch", ERROR, None, sc008_dsr_value)
 SC009 = Rule("SC009", "dsr-sharpe-mismatch", ERROR, None, sc009_dsr_sharpe_matches)
 SC010 = Rule("SC010", "dsr-observations-implausible", ERROR, None, sc010_dsr_observations)
 SC011 = Rule("SC011", "dsr-moments-infeasible", ERROR, None, sc011_dsr_moments)
-SC012 = Rule("SC012", "dsr-trial-variance-zero", ERROR, None, sc012_trial_variance)
+SC012 = Rule("SC012", "trials-identical", WARNING, "same-trials", sc012_trial_variance)
 SC101 = Rule("SC101", "zero-costs", WARNING, "zero-costs", sc101_zero_costs)
 SC102 = Rule("SC102", "not-point-in-time", WARNING, "not-pit", sc102_point_in_time)
 SC103 = Rule("SC103", "survivorship-bias", WARNING, "survivor-bias", sc103_survivorship)

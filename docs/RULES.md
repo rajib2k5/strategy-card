@@ -11,8 +11,9 @@ problem.
 
 ## A card is a disclosure, not a proof
 
-The validator checks that a card is complete, consistent and possible. It cannot check that
-the card is true. The author can choose every input below, and a forger who chooses them
+The validator checks that a card is complete, consistent, and inside necessary bounds. It
+cannot check that the card is true, and passing the bounds does not prove that the numbers
+can occur. The author can choose every input below, and a forger who chooses them
 consistently gets a passing card. Read every card with this in mind.
 
 ### Checked by the validator
@@ -25,8 +26,11 @@ If `performance.deflated_sharpe` is present, the schema requires all its inputs:
 - SC008 recomputes the DSR value from the inputs and the recomputed SR\*.
 - SC009 requires the DSR Sharpe to equal the in-sample Sharpe.
 - SC010 requires `n_observations` to agree with the in-sample window and `periods_per_year`.
-- SC011 requires the skew and kurtosis to be possible for `n_observations` points.
-- SC012 requires a trial variance above 1e-12 when there is more than one trial.
+- SC011 checks necessary bounds on the skew and kurtosis (Pearson and sample-size). Passing
+  SC011 does not prove that the moments are achievable.
+- SC012 warns when the trial variance is below 1e-12 with more than one trial (all trials
+  identical).
+- SC104 grades the lower of the stated DSR and the recomputed DSR.
 
 ### Taken on trust
 
@@ -38,24 +42,31 @@ The validator cannot verify these inputs. It only checks the limits shown.
 | The window dates | valid dates, start < end, out-of-sample after in-sample | that the backtest used these dates |
 | `periods_per_year` | > 0 and ≤ 525,960; consistent with `n_observations` and the window (SC010) | the real sampling frequency. `fill` checks it against the CSV dates; a hand-written card is not checked |
 | The trial count (`trials.count`, `n_trials`) | 1 to 10,000,000; the two values agree | that no other variants were tried |
-| The trial variance | > 1e-12 when there is more than one trial | its real value. A small variance gives a small SR\* and a high DSR |
+| The trial variance | a warning (SC012) below 1e-12 with more than one trial | its real value. A small variance gives a small SR\* and a high DSR |
 | `n_observations` | 2 to 100,000,000; within the SC010 band | the real count inside that band |
-| Skew and kurtosis | possible for `n_observations` points (SC011) | their real values. Feasible but false moments pass (see fixture `warn/SC104__forged-feasible-moments.yaml`) |
+| Skew and kurtosis | necessary bounds only (SC011): Pearson's kurtosis ≥ skew² + 1 and the sample-size limits | that the moments are achievable, and their real values. Moments that pass SC011 can still be impossible: see fixture `warn/SC104__impossible-moments-pass-sc011.yaml` (skew 40, kurtosis 1601 for 1826 points) |
+| The stated SR\* and DSR | within 1e-4 of the recomputed values (SC007, SC008); SC104 grades the lower DSR | differences inside the 1e-4 tolerance |
 | Costs, point-in-time, survivorship, sources | the declared values only | that they are true |
 
 ## Constants
 
 | Constant | Value | Unit | Rule |
 |---|---|---|---|
-| SR tolerance | 0.01 | annualized Sharpe | SC007, SC009 |
-| DSR tolerance | 0.005 | probability | SC008 |
+| SR tolerance | 1e-4 | annualized Sharpe | SC007, SC009 |
+| DSR tolerance | 1e-4 | probability | SC008 |
 | Observation factor | 1.2 | ratio | SC010 |
 | Observation slack | 1 | period | SC010 |
 | Days per year | 365.25 | days | SC010 |
 | Minimum trial variance | 1e-12 | annualized Sharpe² | SC012 |
 | Negligible cost | 0.5 | bps, fees + slippage | SC101 |
 
-The tolerances allow for rounding to four decimal places.
+The tolerances allow for rounding a stated value to four decimal places (maximum error
+5e-5). They do not allow for rounding the inputs and then recomputing elsewhere: the
+recomputed SR\* and DSR use the rounded inputs as written. `strategy-card fill` writes the
+inputs rounded, then recomputes SR\* and the DSR from those rounded inputs, so its output
+passes. An earlier version used 0.01 and 0.005 and said that these "allow for 4-dp
+rounding". That was false: they were 200 and 100 times larger than 4-dp rounding, and a
+card with a recomputed DSR of 0.9452 could state 0.95 and get grade A.
 
 SC010 in detail: n rows span n − 1 periods. Let P = (in-sample end − start in days) /
 365.25 × `periods_per_year`. The rule passes when P / 1.2 − 1 ≤ n_observations − 1 ≤
@@ -90,16 +101,16 @@ Rule IDs are stable. The project never renumbers or reuses an ID.
 | SC004 | dsr-trials-mismatch | error | — | `deflated_sharpe.n_trials` is not equal to `trials.count`. |
 | SC005 | non-finite-number | error | — | A number is NaN or infinite (`.nan`, `.inf` in YAML). JSON Schema `minimum` does not catch NaN. |
 | SC006 | unfilled-placeholder | error | — | A value contains `__FILL_ME__`. `strategy-card fill` writes this placeholder for the fields that only a human can supply. |
-| SC007 | dsr-benchmark-mismatch | error | — | The stated `sr_benchmark_annualized` differs by more than 0.01 from SR\* recomputed from `n_trials` and `trial_sharpe_variance_annualized`. |
-| SC008 | dsr-value-mismatch | error | — | The stated DSR `value` differs by more than 0.005 from the DSR recomputed from the card's inputs, or the inputs are impossible (PSR variance term not positive). The recomputation uses the recomputed SR\*, not the stated one. |
-| SC009 | dsr-sharpe-mismatch | error | — | `deflated_sharpe.sharpe_annualized` differs by more than 0.01 from `performance.sharpe.in_sample`. |
+| SC007 | dsr-benchmark-mismatch | error | — | The stated `sr_benchmark_annualized` differs by more than 1e-4 from SR\* recomputed from `n_trials` and `trial_sharpe_variance_annualized`. |
+| SC008 | dsr-value-mismatch | error | — | The stated DSR `value` differs by more than 1e-4 from the DSR recomputed from the card's inputs, or the inputs are impossible (PSR variance term not positive). The recomputation uses the recomputed SR\*, not the stated one. |
+| SC009 | dsr-sharpe-mismatch | error | — | `deflated_sharpe.sharpe_annualized` differs by more than 1e-4 from `performance.sharpe.in_sample`. |
 | SC010 | dsr-observations-implausible | error | — | `n_observations − 1` is outside [P / 1.2 − 1, P × 1.2 + 1], where P is the number of periods in the in-sample window (see "Constants"). |
 | SC011 | dsr-moments-infeasible | error | — | Kurtosis < skew² + 1 (Pearson's bound), or \|skew\| > (n − 2) / √(n − 1), or kurtosis > (n² − 3n + 3) / (n − 1), with n = `n_observations`. |
-| SC012 | dsr-trial-variance-zero | error | — | `n_trials` > 1 and `trial_sharpe_variance_annualized` < 1e-12. Distinct trials do not all have the same Sharpe ratio, and a zero variance makes SR\* zero. |
+| SC012 | trials-identical | warning | `same-trials` | `n_trials` > 1 and `trial_sharpe_variance_annualized` < 1e-12. All trials then have the same Sharpe ratio. That is the same as one distinct trial, so SR\* = 0 is correct, but the author must make sure that the variants really differ. (An error in round 2; an honest author with a parameter that never triggers could not fix it.) |
 | SC101 | zero-costs | warning | `zero-costs` | `fees_bps + slippage_bps` is less than 0.5 bps (negligible costs). A total of exactly 0.5 does not fire. |
 | SC102 | not-point-in-time | warning | `not-pit` | `data.point_in_time` is `restated`, `unknown` or `mixed`. (`mixed` is included because part of the data is restated.) |
 | SC103 | survivorship-bias | warning | `survivor-bias` | `data.survivorship.handling` is `survivor_only` or `unknown`. |
-| SC104 | low-dsr | warning | `low-dsr` | `deflated_sharpe.value` is less than 0.95. A value of exactly 0.95 does not fire. |
+| SC104 | low-dsr | warning | `low-dsr` | The lower of the stated `deflated_sharpe.value` and the DSR recomputed from the inputs is less than 0.95. Exactly 0.95 does not fire. |
 | SC105 | oos-decay | warning | `oos-decay` | The in-sample Sharpe is more than 0 and the out-of-sample Sharpe is less than 0.5 × the in-sample Sharpe. This is a heuristic. |
 | SC106 | short-oos | warning | `short-oos` | The out-of-sample window is shorter than 365 calendar days. |
 
@@ -127,6 +138,7 @@ The grade is a deterministic function of the findings.
 | SC104 low-dsr | 2 |
 | SC105 oos-decay | 1 |
 | SC106 short-oos | 1 |
+| SC012 trials-identical | 1 |
 
 | Points | Grade |
 |---|---|

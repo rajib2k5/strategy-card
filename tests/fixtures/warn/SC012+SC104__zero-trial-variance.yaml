@@ -1,4 +1,4 @@
-# Must fail with SC010 and SC012: zero trial variance and 3500 observations in a 7-year window. Was grade A.
+# Warnings SC012 and SC104 (exit 0; exit 1 under --strict). 25 trials with variance 0 count as one distinct trial, so SR* = 0 is correct; SC012 asks the author to check the variants really differ.
 # Source: reviewer's forged card (round 2 review), reproduced as a fixture.
 schema_version: '0.1'
 strategy:
@@ -25,12 +25,12 @@ performance:
     in_sample: 0.5
     out_of_sample: 0.5
   deflated_sharpe:
-    value: 0.9685
+    value: 0.9103
     n_trials: 25
     sharpe_annualized: 0.5
     sr_benchmark_annualized: 0.0
     trial_sharpe_variance_annualized: 0.0
-    n_observations: 3500
+    n_observations: 1826
     skew: -0.13
     kurtosis_pearson: 3.09
     method: 'Bailey & Lopez de Prado (2014): PSR at SR* = E[max SR] over n_trials,

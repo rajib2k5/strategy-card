@@ -103,8 +103,8 @@ def test_fill_sharpe_and_dsr_are_internally_consistent(returns_csv, tmp_path):
     x = np.array([r.value for r in rows])
     expected = x.mean() / x.std(ddof=1) * math.sqrt(252)
     perf = card["performance"]
-    assert perf["sharpe"]["in_sample"] == pytest.approx(expected, rel=1e-10)
-    assert perf["deflated_sharpe"]["sharpe_annualized"] == pytest.approx(expected, rel=1e-10)
+    assert perf["sharpe"]["in_sample"] == pytest.approx(expected, abs=5e-5)  # 4-dp output (round 3)
+    assert perf["deflated_sharpe"]["sharpe_annualized"] == pytest.approx(expected, abs=5e-5)
     assert perf["deflated_sharpe"]["n_observations"] == 600
     assert 0 <= perf["deflated_sharpe"]["value"] <= 1
 
@@ -389,8 +389,10 @@ def test_fill_annualized_dsr_fields_match_oracle(returns_csv, tmp_path):
     n = len(trials_ann)
     q = (1 - g) * sps.norm.ppf(1 - 1 / n) + g * sps.norm.ppf(1 - 1 / (n * math.e))
     sr0_ann = math.sqrt(var_ann / 252) * q * math.sqrt(252)
-    assert d["trial_sharpe_variance_annualized"] == pytest.approx(var_ann, rel=1e-10)
-    assert d["sr_benchmark_annualized"] == pytest.approx(sr0_ann, rel=1e-9)
+    assert d["trial_sharpe_variance_annualized"] == pytest.approx(
+        var_ann, rel=1e-5
+    )  # 6 significant digits
+    assert d["sr_benchmark_annualized"] == pytest.approx(sr0_ann, abs=6e-5)  # 4 dp
 
 
 # ---- review item 7: CSV inputs must be regular files
@@ -563,3 +565,159 @@ def test_weekend_rule_applies_just_above_262(tmp_path):
     rows = read_returns(dated_csv(tmp_path, weekdays(400)))
     with pytest.raises(InputError, match="weekend"):
         build_card(rows, [0.5, 1.0], "annualized", 280)
+
+
+# ---- round 3: fill output round-trips at 4 dp and never writes a card validate rejects
+HUMAN = {
+    "strategy": {"name": "x", "description": "y"},
+    "costs": {"fees_bps": 1, "slippage_bps": 1, "model": "flat"},
+    "data": {
+        "point_in_time": "as_reported",
+        "survivorship": {"handling": "not_applicable", "notes": "n"},
+        "sources": [{"name": "s"}],
+    },
+}
+
+
+def test_fill_numbers_are_rounded_to_4_dp_and_validate(returns_csv, tmp_path):
+    from datetime import date
+
+    t = write(tmp_path, "t.csv", "sharpe_annualized\n0.3\n0.9\n0.55\n1.2\n")
+    card = build_card(read_returns(returns_csv), *read_trials(t), 252, split_date=date(2020, 6, 1))
+    d = card["performance"]["deflated_sharpe"]
+    for k in ("value", "sharpe_annualized", "sr_benchmark_annualized", "skew", "kurtosis_pearson"):
+        assert d[k] == round(d[k], 4), k
+    for k in ("in_sample", "out_of_sample"):
+        v = card["performance"]["sharpe"][k]
+        assert v == round(v, 4), k
+    card.update(HUMAN)
+    report = validate_card(yaml.safe_load(yaml.safe_dump(card)))
+    assert report.errors == []
+
+
+def test_fill_two_row_in_sample_is_accepted_and_kurtosis_is_clamped(tmp_path):
+    from datetime import date
+
+    days = weekdays(300)
+    r = dated_csv(tmp_path, days)
+    t = write(tmp_path, "t.csv", "sharpe_annualized\n0.3\n0.9\n")
+    card = build_card(read_returns(r), *read_trials(t), 252, split_date=date.fromisoformat(days[2]))
+    d = card["performance"]["deflated_sharpe"]
+    assert d["n_observations"] == 2
+    assert d["kurtosis_pearson"] >= d["skew"] ** 2 + 1  # 0.9999999999999998 clamped to 1.0
+
+
+def test_fill_refuses_sharpe_above_schema_maximum(tmp_path, capsys):
+    lines = ["date,return"] + [
+        f"{d},{0.01 + (1e-9 if i % 2 else 0):.12f}" for i, d in enumerate(weekdays(300))
+    ]
+    r = write(tmp_path, "r.csv", "\n".join(lines) + "\n")
+    t = write(tmp_path, "t.csv", "sharpe_annualized\n0.3\n0.9\n")
+    out = tmp_path / "c.yaml"
+    args = ["fill", "--returns", str(r), "--trials", str(t), "-o", str(out)]
+    assert main([*args, "--periods-per-year", "252"]) == 2
+    err = capsys.readouterr().err
+    assert "SC000" in err and "1000" in err
+    assert not out.exists()
+
+
+def test_fill_refuses_in_sample_gap_that_trips_sc010(tmp_path, capsys):
+    import datetime as dt
+
+    is_days = weekdays(20)  # Jan 2015
+    late_is = "2017-01-03"  # one more in-sample row two years later
+    oos, d = [], dt.date(2017, 2, 1)
+    while len(oos) < 4000:
+        if d.weekday() < 5:
+            oos.append(d.isoformat())
+        d += dt.timedelta(days=1)
+    r = dated_csv(tmp_path, [*is_days, late_is, *oos])
+    t = write(tmp_path, "t.csv", "sharpe_annualized\n0.3\n0.9\n")
+    out = tmp_path / "c.yaml"
+    args = ["fill", "--returns", str(r), "--trials", str(t), "-o", str(out)]
+    assert main([*args, "--periods-per-year", "252", "--split-date", "2017-02-01"]) == 2
+    assert "SC010" in capsys.readouterr().err
+    assert not out.exists()
+
+
+def test_six_day_market_with_saturdays_accepts_313(tmp_path):
+    """Mon-Sat data has Saturdays but no Sundays (kills X7: weekday >= 5 -> >= 6)."""
+    import datetime as dt
+
+    days, d = [], dt.date(2015, 1, 5)
+    while len(days) < 600:
+        if d.weekday() < 6:
+            days.append(d.isoformat())
+        d += dt.timedelta(days=1)
+    rows = read_returns(dated_csv(tmp_path, days))
+    build_card(rows, [0.5, 1.0], "annualized", 313)
+
+
+def test_fill_two_valued_in_sample_sits_on_both_moment_bounds(tmp_path):
+    """9 x +1% and 1 x -5%: skew -8/3, kurtosis 73/9 = skew^2 + 1 = the n = 10 maximum.
+
+    Rounding the skew AWAY from zero (-2.6667) makes skew^2 + 1 exceed the kurtosis maximum,
+    so no rounded kurtosis is valid. fill must round the skew toward zero and clamp the
+    kurtosis into the bounds, and the draft must validate.
+    """
+    from datetime import date
+
+    days = weekdays(300)
+    rets = [0.01] * 9 + [-0.05] + [0.001 * ((i % 7) - 3) for i in range(290)]
+    lines = ["date,return"] + [f"{d},{r:.8f}" for d, r in zip(days, rets, strict=True)]
+    r = write(tmp_path, "r.csv", "\n".join(lines) + "\n")
+    t = write(tmp_path, "t.csv", "sharpe_annualized\n0.3\n0.9\n")
+    card = build_card(
+        read_returns(r), *read_trials(t), 252, split_date=date.fromisoformat(days[10])
+    )
+    d = card["performance"]["deflated_sharpe"]
+    assert d["n_observations"] == 10
+    assert d["skew"] == -2.6666  # truncated toward zero, not -2.6667
+    assert d["skew"] ** 2 + 1 <= d["kurtosis_pearson"] <= (100 - 30 + 3) / 9
+
+
+def test_rounded_dsr_block_clamps_kurtosis_to_pearson_floor():
+    """skew 0.1234 -> skew^2 + 1 = 1.01522756; kurtosis 1.01522757 rounds DOWN to 1.0152,
+    below the bound. The block must clamp it up to 1.0153 (kills M90)."""
+    from strategy_card.fill import _rounded_dsr_block
+    from strategy_card.stats import DSRResult
+
+    res = DSRResult(
+        value=0.5,
+        n_trials=5,
+        n_observations=2000,
+        sharpe_per_period=0.05,
+        sharpe_annualized=0.05 * math.sqrt(252),
+        sr_benchmark_per_period=0.0,
+        sr_benchmark_annualized=0.0,
+        trial_sharpe_variance_per_period=0.1 / 252,
+        trial_sharpe_variance_annualized=0.1,
+        skew=0.1234,
+        kurtosis=1.01522757,
+    )
+    d = _rounded_dsr_block(res, 252)
+    assert d["skew"] == 0.1234
+    assert d["kurtosis_pearson"] == 1.0153
+    assert d["kurtosis_pearson"] >= d["skew"] ** 2 + 1
+
+
+@pytest.mark.parametrize("seed", range(12))
+def test_fill_dsr_round_trips_exactly_at_4_dp(tmp_path, seed):
+    """The written SR* and DSR equal the validator's recomputation from the WRITTEN inputs,
+    rounded to 4 dp (kills M92: DSR from unrounded inputs)."""
+    from strategy_card import rules as R
+
+    rng = np.random.default_rng(100 + seed)
+    days = weekdays(400)
+    rets = rng.standard_t(4, 400) * 0.01 + 0.0008
+    lines = ["date,return"] + [f"{d},{r:.8f}" for d, r in zip(days, rets, strict=True)]
+    r = write(tmp_path, "r.csv", "\n".join(lines) + "\n")
+    trials = rng.normal(0.8, 0.4, int(rng.integers(2, 60)))
+    t = write(
+        tmp_path, "t.csv", "sharpe_annualized\n" + "\n".join(f"{x:.6f}" for x in trials) + "\n"
+    )
+    card = yaml.safe_load(yaml.safe_dump(build_card(read_returns(r), *read_trials(t), 252)))
+    d = card["performance"]["deflated_sharpe"]
+    sr_star = R._recomputed_sr_star_pp(card, d) * math.sqrt(252)
+    assert d["sr_benchmark_annualized"] == round(sr_star, 4)
+    assert d["value"] == round(R.recomputed_dsr(card, d), 4)

@@ -35,7 +35,9 @@ consistent lie. These inputs are taken on trust (details and limits in `RULES.md
 - the window dates;
 - the trial count;
 - the trial variance, beyond being > 0 when there is more than one trial;
-- the skew and kurtosis, beyond being possible for `n_observations` points;
+- the skew and kurtosis, beyond necessary bounds (Pearson and sample-size). Passing SC011
+  does not prove that the moments are achievable;
+- the stated SR\* and DSR inside the 1e-4 tolerance (SC104 grades the lower DSR);
 - `n_observations` and `periods_per_year` inside the SC010 band;
 - costs, point-in-time status, survivorship handling and sources.
 
@@ -62,9 +64,9 @@ document said that only the trial variance was taken on trust. That was false.
 | Exit codes | 0 ok (warnings allowed) · 1 errors, or warnings under `--strict` · 2 unreadable or invalid input |
 | Grade | deterministic function of the findings: any error → F; otherwise warning weights sum to a letter A–E (see `RULES.md`) |
 | Badge | shields.io "flat" style SVG, label `strategy card`, message = grade + up to two flags. No fonts, scripts, links or external references. Refuses to overwrite without `--force` |
-| DSR checks | the card's DSR is recomputed from its own inputs (SC007, SC008), cross-checked against the in-sample Sharpe (SC009) and the in-sample window (SC010), and its inputs must be feasible (SC011, SC012). Many inputs remain taken on trust: see "A card is a disclosure, not a proof" below and `RULES.md` |
+| DSR checks | the card's DSR is recomputed from its own inputs (SC007, SC008), cross-checked against the in-sample Sharpe (SC009) and the in-sample window (SC010), its moments must pass necessary bounds (SC011; passing does not prove they are achievable), and identical trials warn (SC012). Many inputs remain taken on trust: see "A card is a disclosure, not a proof" below and `RULES.md` |
 | Periods per year | `fill --periods-per-year` is required and checked against (rows − 1) / calendar years spanned, factor 1.15. A value above 262 needs weekend dates in the data |
-| Filler | computes Sharpe, trial count and DSR from CSVs. Fields that CSVs cannot know are written as the placeholder `__FILL_ME__`, which fails validation (SC006) until a human replaces it |
+| Filler | computes Sharpe, trial count and DSR from CSVs, rounds them to 4 dp and recomputes SR\* and the DSR from the rounded inputs. Fields that CSVs cannot know are written as the placeholder `__FILL_ME__`, which fails validation (SC006) until a human replaces it. Before writing, it validates the draft with neutral stand-ins for the human fields and refuses (exit 2) if any other error appears |
 | DSR units | every Sharpe ratio that enters PSR / E[max SR] / DSR is **per-period**. The trial log must name its unit in the header (`sharpe_annualized` or `sharpe_per_period`), so the unit is never guessed. The card stores annualized values for display |
 | DSR null | SR\* = expected maximum of N trial Sharpes under a zero-mean null (Bailey & López de Prado 2014, eq. for SR0), using the sample variance (ddof = 1) of the trial Sharpes. Skew and **Pearson** kurtosis (normal = 3) of the chosen strategy's returns, moment estimators (bias = True) |
 

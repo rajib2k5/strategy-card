@@ -32,7 +32,7 @@ performance:
     n_trials: 25
     sharpe_annualized: 1.2106
     sr_benchmark_annualized: 0.6208
-    trial_sharpe_variance_annualized: 0.0966
+    trial_sharpe_variance_annualized: 0.0966249
     n_observations: 1826
     skew: -0.1333
     kurtosis_pearson: 3.0906

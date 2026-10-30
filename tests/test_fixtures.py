@@ -66,7 +66,7 @@ def test_every_error_rule_has_a_bad_fixture():
 
 
 def test_every_warning_rule_has_a_warn_fixture():
-    covered = {expected_id(p) for p in WARN}
+    covered = set().union(*(expected_ids(p) for p in WARN))
     assert {r.id for r in RULES if r.severity == "warning"} <= covered
 
 
@@ -101,10 +101,10 @@ def test_bad_card_also_fails_in_text_mode(path, capsys):
 
 @pytest.mark.parametrize("path", WARN, ids=lambda p: p.name)
 def test_warning_card_passes_but_fails_strict(path, capsys):
-    rid = expected_id(path)
+    rids = expected_ids(path)
     code, report = run_json(capsys, str(path))
     assert code == 0
-    assert {f["id"] for f in report["findings"]} == {rid}
+    assert {f["id"] for f in report["findings"]} == rids
     assert all(f["severity"] == "warning" for f in report["findings"])
     strict_code, strict_report = run_json(capsys, "--strict", str(path))
     assert strict_code == 1 and strict_report["exit_code"] == 1

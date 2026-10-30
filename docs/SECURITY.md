@@ -81,7 +81,10 @@ Each control has a test. Confidence is high for the items marked *tested*.
     and rules SC007 to SC012 recompute or cross-check them. Round 2 showed that the
     round 1 checks were not enough: cards with impossible moments (skew 51.86, kurtosis 1),
     zero trial variance, or twice the possible number of observations still got grade A.
-    SC011, SC012 and a tighter SC010 now reject them. Many inputs are still taken on trust
+    SC011 (necessary moment bounds) and a tighter SC010 now reject them; zero trial variance
+    is a warning (SC012) since round 3. Round 3 also showed that the 0.005 DSR tolerance let
+    a card state 0.95 for a recomputed 0.9452 and get grade A: the tolerances are now 1e-4
+    and SC104 grades the lower DSR. Many inputs are still taken on trust
     (see `RULES.md`). A card is a disclosure, not a proof. *Tested* with the forged cards
     as fixtures.
 17. **Tracebacks from extreme numbers.** `n_trials` 1e16 (StatisticsError), `n_observations`

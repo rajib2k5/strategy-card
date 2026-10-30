@@ -169,7 +169,8 @@ def write_text_atomic(path: str | os.PathLike, text: str, *, overwrite: bool = F
         try:
             st = os.lstat(p)
             if stat.S_ISREG(st.st_mode):
-                mode = stat.S_IMODE(st.st_mode)
+                # Keep rwx bits only: never carry setuid, setgid or sticky onto new content.
+                mode = stat.S_IMODE(st.st_mode) & 0o777
         except FileNotFoundError:
             pass
     directory = p.parent if str(p.parent) else Path(".")
@@ -198,5 +199,17 @@ def _publish_exclusive(tmp: str, p: Path, text: str, mode: int) -> None:
         # File system without hard links: O_EXCL | O_NOFOLLOW still refuses any existing path.
         flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
         fd = os.open(p, flags, mode)
-        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as fh:
-            fh.write(text)
+        try:
+            _write_all(fd, text)
+        except BaseException:
+            os.close(fd)
+            p.unlink(missing_ok=True)  # we created it with O_EXCL, so it is ours to remove
+            raise
+        os.close(fd)
+
+
+def _write_all(fd: int, text: str) -> None:
+    data = text.encode("utf-8")
+    view = memoryview(data)
+    while view:
+        view = view[os.write(fd, view) :]

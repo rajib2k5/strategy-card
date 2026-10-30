@@ -18,9 +18,9 @@ from typing import Any
 
 import yaml
 
-from . import SCHEMA_VERSION
+from . import SCHEMA_VERSION, rules
 from .loader import MAX_CSV_BYTES, InputError, read_capped
-from .rules import PLACEHOLDER
+from .rules import ERROR, PLACEHOLDER
 from .stats import (
     ANNUALIZED,
     PER_PERIOD,
@@ -188,11 +188,100 @@ def build_card(
     split_date: date | None = None,
     trials_log: str | None = None,
 ) -> dict[str, Any]:
-    """Draft card. Any arithmetic failure (overflow, domain error) is an InputError."""
+    """Draft card. Any arithmetic failure (overflow, domain error) is an InputError.
+
+    The draft is then validated with the human-only fields replaced by neutral stand-ins.
+    If any error other than the placeholder itself (SC006) appears, the draft is refused:
+    fill never writes a card that validate rejects for a reason the human cannot fix.
+    """
     try:
-        return _build_card(returns, trials, trial_unit, periods_per_year, split_date, trials_log)
+        card = _build_card(returns, trials, trial_unit, periods_per_year, split_date, trials_log)
     except (ValueError, ArithmeticError) as exc:  # StatisticsError is a ValueError
         raise InputError(f"cannot compute the card: {type(exc).__name__}: {exc}") from exc
+    problems = draft_errors(card)
+    if problems:
+        detail = "; ".join(f"{f.id} at {f.path}: {f.message}" for f in problems)
+        raise InputError(f"the draft card would fail validation: {detail}")
+    return card
+
+
+def _with_neutral_human_fields(card: dict[str, Any]) -> dict[str, Any]:
+    """A copy of the draft with every placeholder replaced by a valid, neutral value.
+
+    Used only to run the validator on the computed fields; it is never written.
+    """
+    import copy
+    from datetime import timedelta
+
+    c = copy.deepcopy(card)
+    c["strategy"] = {"name": "draft", "description": "draft"}
+    c["costs"] = {"fees_bps": 1, "slippage_bps": 1, "model": "draft"}
+    c["data"] = {
+        "point_in_time": "as_reported",
+        "survivorship": {"handling": "not_applicable", "notes": "draft"},
+        "sources": [{"name": "draft"}],
+    }
+    oos = c["test_window"]["out_of_sample"]
+    if PLACEHOLDER in (oos["start"], oos["end"]):
+        is_end = parse_iso_date(c["test_window"]["in_sample"]["end"])
+        c["test_window"]["out_of_sample"] = {
+            "start": (is_end + timedelta(days=1)).isoformat(),
+            "end": (is_end + timedelta(days=400)).isoformat(),
+        }
+    sharpe = c["performance"]["sharpe"]
+    if sharpe["out_of_sample"] == PLACEHOLDER:
+        sharpe["out_of_sample"] = sharpe["in_sample"]
+    return c
+
+
+def draft_errors(card: dict[str, Any]) -> list:
+    from .validate import validate_card
+
+    report = validate_card(_with_neutral_human_fields(card))
+    return [f for f in report.findings if f.severity == ERROR and f.id != rules.SC006.id]
+
+
+def _r4(x: float) -> float:
+    return round(x, 4)
+
+
+def _sig6(x: float) -> float:
+    return float(f"{x:.6g}")
+
+
+def _ceil4(x: float) -> float:
+    return math.ceil(round(x * 1e4, 6)) / 1e4
+
+
+def _floor4(x: float) -> float:
+    return math.floor(round(x * 1e4, 6)) / 1e4
+
+
+def _rounded_dsr_block(res, periods_per_year: float) -> dict[str, Any]:
+    """Round the DSR inputs for display, then RECOMPUTE SR* and the DSR from the rounded
+    inputs with the validator's own functions, so the written card round-trips exactly."""
+    n = res.n_observations
+    # Round the skew TOWARD ZERO: rounding away from zero can push skew^2 + 1 above the
+    # kurtosis maximum for samples that sit on both bounds (two-valued samples).
+    skew = math.trunc(round(res.skew * 1e4, 6)) / 1e4
+    # Clamp float noise into the necessary bounds (e.g. 0.9999999999999998 -> 1.0).
+    kurt = max(_r4(res.kurtosis), _ceil4(skew * skew + 1))
+    kurt = min(kurt, _floor4((n * n - 3 * n + 3) / (n - 1)))
+    block: dict[str, Any] = {
+        "value": None,
+        "n_trials": res.n_trials,
+        "sharpe_annualized": _r4(res.sharpe_annualized),
+        "sr_benchmark_annualized": None,
+        "trial_sharpe_variance_annualized": _sig6(res.trial_sharpe_variance_annualized),
+        "n_observations": n,
+        "skew": skew,
+        "kurtosis_pearson": kurt,
+    }
+    view = {"performance": {"periods_per_year": periods_per_year}}
+    sr_star_pp = rules._recomputed_sr_star_pp(view, block)
+    block["sr_benchmark_annualized"] = _r4(annualize(sr_star_pp, periods_per_year))
+    block["value"] = _r4(rules.recomputed_dsr(view, block))
+    return block
 
 
 def _build_card(
@@ -215,9 +304,9 @@ def _build_card(
             raise InputError("--split-date must leave at least two returns on each side")
 
     sharpe: dict[str, Any] = {
-        "in_sample": _sharpe_ann(in_rows, periods_per_year, "in-sample returns"),
+        "in_sample": _r4(_sharpe_ann(in_rows, periods_per_year, "in-sample returns")),
         "out_of_sample": (
-            _sharpe_ann(oos_rows, periods_per_year, "out-of-sample returns")
+            _r4(_sharpe_ann(oos_rows, periods_per_year, "out-of-sample returns"))
             if oos_rows
             else PLACEHOLDER
         ),
@@ -232,14 +321,7 @@ def _build_card(
         except ValueError as exc:
             raise InputError(f"cannot compute the deflated Sharpe ratio: {exc}") from exc
         performance["deflated_sharpe"] = {
-            "value": res.value,
-            "n_trials": res.n_trials,
-            "sharpe_annualized": res.sharpe_annualized,
-            "sr_benchmark_annualized": res.sr_benchmark_annualized,
-            "trial_sharpe_variance_annualized": res.trial_sharpe_variance_annualized,
-            "n_observations": res.n_observations,
-            "skew": res.skew,
-            "kurtosis_pearson": res.kurtosis,
+            **_rounded_dsr_block(res, periods_per_year),
             "method": (
                 "Bailey & Lopez de Prado (2014): PSR at SR* = E[max SR] over n_trials, "
                 "zero-mean null, sample variance of trial Sharpes, in-sample returns"

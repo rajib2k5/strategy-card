@@ -19,6 +19,7 @@ WARNING_WEIGHTS: dict[str, int] = {
     "SC104": 2,  # low-dsr
     "SC105": 1,  # oos-decay
     "SC106": 1,  # short-oos
+    "SC012": 1,  # trials-identical
 }
 
 # (minimum points, letter), checked from the top.

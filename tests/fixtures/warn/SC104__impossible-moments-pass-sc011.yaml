@@ -1,4 +1,4 @@
-# Warning SC104 only. Skew 40 / kurtosis 1601 are FEASIBLE for 1826 points, so no error rule can reject them: moments are taken on trust (see docs/RULES.md). The DSR they imply (0.75) still warns.
+# Warning SC104 only, yet these moments are IMPOSSIBLE: kurtosis = skew^2 + 1 (1601 = 40^2 + 1) is reachable only by a two-valued sample, and for n = 1826 a two-valued sample has |skew| 42.70 or 30.17, never 40. SC011 checks necessary bounds only (Pearson and sample size), so this card passes it. Moments beyond those bounds are taken on trust (docs/RULES.md).
 # Source: reviewer's forged card (round 2 review), reproduced as a fixture.
 schema_version: '0.1'
 strategy:
