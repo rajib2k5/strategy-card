@@ -27,6 +27,7 @@ dev = [
     "scipy>=1.11",
     "hypothesis>=6.100",
     "ruff>=0.5",
+    "rich>=13",
 ]
 
 [project.scripts]

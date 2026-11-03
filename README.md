@@ -4,6 +4,10 @@ A one-page disclosure card for a backtest, with a validator and a badge. It is l
 
 ![strategy card badge](docs/badge-demo.svg)
 
+![Terminal output of strategy-card validate. Two seeded bad cards are rejected with rule IDs SC003 and SC008, and each run exits with code 1.](docs/images/validate-reject.svg)
+
+The validator rejects a bad card and gives the rule ID. All images in this README come from real runs of the tool.
+
 > **Analysis only. Not investment advice.** This tool reads files and writes files. It places no orders. It connects to no broker. It uses no network.
 
 ## What it does
@@ -40,6 +44,42 @@ pytest
 ```
 
 The tool needs Python 3.10 or later. The runtime dependencies are `pyyaml` and `jsonschema` only.
+
+## How to use
+
+Each image below is a real run of the tool on the files in this repository. The script [`scripts/screenshots.py`](scripts/screenshots.py) makes them. It needs the `dev` extras.
+
+### 1. Install
+
+![Terminal output of pip install -e . followed by strategy-card --help, which lists the four subcommands.](docs/images/install.svg)
+
+Install the package and run `strategy-card --help`. The pip output is trimmed to its last lines.
+
+### 2. Draft a card from CSV files
+
+![Terminal output of strategy-card fill, then strategy-card validate. The draft card fails with SC006 placeholder errors.](docs/images/fill.svg)
+
+`fill` writes a draft card. `validate` then lists the fields that only a person can supply (rule `SC006`). The Claude Code skill drives these same commands.
+
+### 3. Validate a card
+
+![Terminal output of strategy-card validate on the sample card. The card gets grade D with two warnings and exit code 0.](docs/images/validate-pass.svg)
+
+The sample card has no errors, so the exit code is 0. It gets grade D because of two warnings.
+
+### 4. See a card rejected
+
+![Terminal output of strategy-card validate on two bad cards. Each card has one error and the exit code is 1.](docs/images/validate-reject.svg)
+
+A card with 20 trials and no DSR fails with `SC003`. A card with a rounded-up DSR fails with `SC008`. Both runs exit with code 1.
+
+### 5. Make a badge
+
+![Terminal output of strategy-card badge, which writes badge.svg for the sample card with grade D.](docs/images/badge.svg)
+
+The `badge` command writes an SVG file. This is the badge that it writes for the sample card:
+
+![Rendered badge for the sample card, grade D.](docs/badge-demo.svg)
 
 ## Sample card
 
